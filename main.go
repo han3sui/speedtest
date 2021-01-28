@@ -10,12 +10,16 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 )
 
+var dir string
+
 func main() {
-	_ = request("https://www.google.com.hk/", "socks5://127.0.0.1:2000")
+	dir, _ = os.Getwd()
 	file, err := os.Open("node.txt")
 	if err != nil {
 		panic(err)
@@ -27,7 +31,7 @@ func main() {
 	base64DecodeC, _ := base64.StdEncoding.DecodeString(string(c))
 	strBase64 := string(base64DecodeC)
 	sliceBase64 := strings.Split(strBase64, "\n")
-	for _, v := range sliceBase64 {
+	for i, v := range sliceBase64 {
 		if strings.Contains(v, "vmess://") {
 			s := strings.Replace(v, "vmess://", "", -1)
 			sByte, _ := base64.StdEncoding.DecodeString(s)
@@ -36,14 +40,16 @@ func main() {
 			if err != nil {
 				fmt.Printf("序列化节点出错")
 			}
-			createConfigFile(sMap)
+			createConfigFile(i, sMap)
 			//fmt.Printf("%v\n", sMap)
 		}
 	}
+	select {}
 }
 
-func createConfigFile(node map[string]interface{}) {
-	name := strings.TrimSpace(fmt.Sprintf("%v.json", node["ps"]))
+func createConfigFile(index int, node map[string]interface{}) {
+	name := strings.TrimSpace(fmt.Sprintf("%v", node["ps"]))
+	configDir := fmt.Sprintf("%v/client/config/%v.json", dir, index)
 	add := fmt.Sprintf("%v", node["add"])
 	aid := fmt.Sprintf("%v", node["aid"])
 	host := fmt.Sprintf("%v", node["host"])
@@ -51,12 +57,12 @@ func createConfigFile(node map[string]interface{}) {
 	net := fmt.Sprintf("%v", node["net"])
 	path := fmt.Sprintf("%v", node["path"])
 	port := fmt.Sprintf("%v", node["port"])
-	file, err := os.Stat(name)
+	file, err := os.Stat(configDir)
 	if err != nil || file.IsDir() {
 		tmp := fmt.Sprintf(`
 {
   "inbound": {
-    "port": 2000,
+    "port": %v,
     "listen": "127.0.0.1",
     "protocol": "socks",
     "sniffing": {
@@ -102,16 +108,26 @@ func createConfigFile(node map[string]interface{}) {
     }
   }
 }
-`, add, port, id, aid, net, host, path)
-		err := ioutil.WriteFile(name, []byte(tmp), 0644)
+`, 2000+index, add, port, id, aid, net, host, path)
+		err := ioutil.WriteFile(configDir, []byte(tmp), 0644)
 		if err != nil {
-			fmt.Printf("配置文件创建失败[%v]\n%v\n", name,err.Error())
+			fmt.Printf("配置文件创建失败[%v]\n%v\n", name, err.Error())
+		} else {
+			go execV2rayCore(index, 2000+index)
 		}
 	}
 }
 
-func execV2rayCore() {
-
+func execV2rayCore(index int, port int) {
+	cmd := fmt.Sprintf("%v/client/%v/xray.exe -config %v/client/config/%v.json", dir, runtime.GOOS, dir, index)
+	r := exec.Command("cmd", "/c", cmd)
+	ww, err := r.Output()
+	if err != nil {
+		fmt.Printf("执行命令出错：%v\n%v\n%v\n%v\n", index, err.Error(), r.Args, string(ww))
+	} else {
+		fmt.Printf("执行命令成功，ID为：%v", r.Process.Pid)
+		_ = request("https://www.google.com.hk/", fmt.Sprintf("socks5://127.0.0.1:%v", port))
+	}
 }
 
 //func main() {
@@ -126,7 +142,7 @@ func execV2rayCore() {
 func request(urlLink string, proxyStr string) (r *http.Response) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Printf("PANIC RECOVER:\n%v", err)
+			fmt.Printf("PANIC RECOVER:\n%v\n", err)
 		}
 	}()
 	proxyUrl, err := url.Parse(proxyStr)

@@ -13,10 +13,13 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
 var dir string
+
+var wg sync.WaitGroup
 
 func main() {
 	dir, _ = os.Getwd()
@@ -31,6 +34,10 @@ func main() {
 	base64DecodeC, _ := base64.StdEncoding.DecodeString(string(c))
 	strBase64 := string(base64DecodeC)
 	sliceBase64 := strings.Split(strBase64, "\n")
+	//结束xray进程
+	_, _ = exec.Command("cmd", "/c", "taskkill", "/f", "/im", "xray.exe").Output()
+	//删除配置文件
+	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.json", dir)).Output()
 	for i, v := range sliceBase64 {
 		if strings.Contains(v, "vmess://") {
 			s := strings.Replace(v, "vmess://", "", -1)
@@ -44,7 +51,7 @@ func main() {
 			//fmt.Printf("%v\n", sMap)
 		}
 	}
-	select {}
+	wg.Wait()
 }
 
 func createConfigFile(index int, node map[string]interface{}) {
@@ -113,44 +120,37 @@ func createConfigFile(index int, node map[string]interface{}) {
 		if err != nil {
 			fmt.Printf("配置文件创建失败[%v]\n%v\n", name, err.Error())
 		} else {
-			go execV2rayCore(index, 2000+index)
+			wg.Add(1)
+			go execXrayCore(index, 2000+index, name)
 		}
 	}
 }
 
-func execV2rayCore(index int, port int) {
+func execXrayCore(index int, port int, name string) {
 	cmd := fmt.Sprintf("%v/client/%v/xray.exe -config %v/client/config/%v.json", dir, runtime.GOOS, dir, index)
 	r := exec.Command("cmd", "/c", cmd)
-	ww, err := r.Output()
+	err := r.Start()
 	if err != nil {
-		fmt.Printf("执行命令出错：%v\n%v\n%v\n%v\n", index, err.Error(), r.Args, string(ww))
+		fmt.Printf("启动xray出错：%v\n%v\n%v\n", index, err.Error(), r.Args)
 	} else {
-		fmt.Printf("执行命令成功，ID为：%v", r.Process.Pid)
-		_ = request("https://www.google.com.hk/", fmt.Sprintf("socks5://127.0.0.1:%v", port))
+		//fmt.Printf("启动xray成功，PID为：%v，节点为：%v\n", r.Process.Pid, name)
+		_, _ = request("https://www.google.com.hk/", fmt.Sprintf("socks5://127.0.0.1:%v", port), name, r.Process.Pid)
+		//if err != nil {
+		//	fmt.Printf("HTTP请求出错：%v\n", err)
+		//}
 	}
 }
 
-//func main() {
-//	r := client("https://sub.wild233.cf/link/20D8L4YfgsoR9WeB?sub=3")
-//	body, _ := ioutil.ReadAll(r.Body)
-//	base64Decode, _ := base64.StdEncoding.DecodeString(string(body))
-//	base64DecodeStr := string(base64Decode)
-//	base64DecodeSlice := strings.Split(base64DecodeStr, "\r\n")
-//	fmt.Println(base64DecodeSlice)
-//}
-//
-func request(urlLink string, proxyStr string) (r *http.Response) {
+func request(urlLink string, proxyStr string, name string, pid int) (body string, err error) {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("PANIC RECOVER:\n%v\n", err)
+			wg.Done()
 		}
 	}()
-	proxyUrl, err := url.Parse(proxyStr)
-	if err != nil {
-		panic(err)
-	}
+	proxyUrl, _ := url.Parse(proxyStr)
 	client := &http.Client{
-		Timeout: 15 * time.Second,
+		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
@@ -160,7 +160,7 @@ func request(urlLink string, proxyStr string) (r *http.Response) {
 	}
 	request, err := http.NewRequest("GET", urlLink, nil)
 	if err != nil {
-		panic(err)
+		return
 	}
 	request.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36")
 	var start, connect, dns time.Time
@@ -169,24 +169,30 @@ func request(urlLink string, proxyStr string) (r *http.Response) {
 			dns = time.Now()
 		},
 		DNSDone: func(dnsDoneInfo httptrace.DNSDoneInfo) {
-			fmt.Printf("DNS DONE: %v\n", time.Since(dns))
+			//fmt.Printf("DNS DONE: %v\n", time.Since(dns))
 		},
 		ConnectStart: func(network, addr string) {
 			connect = time.Now()
 		},
 		ConnectDone: func(network, addr string, err error) {
-			fmt.Printf("Connect Time: %v\n", time.Since(connect))
+			//fmt.Printf("Connect Time: %v\n", time.Since(connect))
 		},
 		GotFirstResponseByte: func() {
-			fmt.Printf("Time from start to first byte: %v\n", time.Since(start))
+			//fmt.Printf("Time from start to first byte: %v\n", time.Since(start))
 		},
 	}
 	request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 	start = time.Now()
-	r, err = client.Do(request)
+	r, err := client.Do(request)
 	if err != nil {
-		panic(err)
+		fmt.Printf("连接失败，节点：%v\n\n", name)
+		err = exec.Command("cmd", "/c", fmt.Sprintf("taskkill /pid %v -f", pid)).Run()
+		wg.Done()
+		return
 	}
-	fmt.Printf("Total time: %v\n", time.Since(start))
-	return r
+	fmt.Printf("连接成功，耗时: %v，节点：%v，配置：%v\n\n", time.Since(start), name, proxyStr)
+	bodyByte, _ := ioutil.ReadAll(r.Body)
+	body = string(bodyByte)
+	wg.Done()
+	return
 }

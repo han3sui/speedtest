@@ -149,7 +149,7 @@ func ExecV2rayCore(index int, port int, name string) (proxy string, err error) {
 		return
 	}
 	//lib.Log().Info("启动v2ray成功，PID为：%v，节点为：%v\n", r.Process.Pid, name)
-	r, err := lib.Request("https://www.google.com.hk/", fmt.Sprintf("socks5://127.0.0.1:%v", port))
+	r, err := lib.Request("https://www.google.com", fmt.Sprintf("socks5://127.0.0.1:%v", port))
 	if err != nil {
 		lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())
 		return

@@ -1,3 +1,4 @@
 /.idea
 /node.txt
 /client/config/*.json
+/client/config/*.pb

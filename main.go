@@ -70,7 +70,6 @@ func KillProcess() {
 	//删除配置文件
 	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.json", dir)).Output()
 	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.pb", dir)).Output()
-	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\tmp\\*.bin", dir)).Output()
 }
 
 func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err error) {

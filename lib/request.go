@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
-	"os"
 	"strconv"
 	"time"
 )
@@ -112,13 +111,11 @@ func Download(url string, proxy string, filename string) (err error) {
 			retries = retries - 1
 		} else {
 			defer r.Body.Close()
-			out, _ := os.Create(filename)
-			defer out.Close()
 			reader := &Reader{
 				Reader: r.Body,
 				Total:  int(r.ContentLength),
 			}
-			_, _ = io.Copy(out, reader)
+			_, _ = io.Copy(ioutil.Discard, reader)
 			break
 		}
 	}

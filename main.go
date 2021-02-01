@@ -10,12 +10,20 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"v2ray-speedtest/lib"
 )
 
 var dir string
 var wg sync.WaitGroup
 var goos string
+
+type proxyNode struct {
+	Name  string
+	Proxy string
+}
+
+var proxySlice []proxyNode
 
 func main() {
 	var err error
@@ -24,14 +32,13 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("获取项目路径出错：%v\n", err.Error()))
 	}
-	r, err := lib.Request("https://sub.wild233.cf/link/20D8L4YfgsoR9WeB?sub=3", "")
+	r, err := lib.Request("https://sub.wild233.cf/link/20D8L4YfgsoR9WeB?sub=3", "", 5*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("获取节点订阅出错：%v\n", err.Error()))
 	}
 	base64DecodeC, _ := base64.StdEncoding.DecodeString(r.Body)
 	sliceBase64 := strings.Split(string(base64DecodeC), "\n")
 	KillProcess()
-	var proxySlice []string
 	for i, v := range sliceBase64 {
 		if strings.Contains(v, "vmess://") {
 			s := strings.Replace(v, "vmess://", "", -1)
@@ -41,15 +48,19 @@ func main() {
 			if err != nil {
 				lib.Log().Error("序列化节点出错")
 			} else {
-				proxy, err := CreateConfigFile(i, sMap)
-				if err != nil {
-					proxySlice = append(proxySlice, proxy)
-				}
+				_, _ = CreateConfigFile(i, sMap)
 			}
 		}
 	}
 	wg.Wait()
-	fmt.Printf("%v", proxySlice)
+	for i, v := range proxySlice {
+		//fmt.Printf("%v\n",v)
+		lib.Log().Info("测速节点：[%v]", v.Name)
+		err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy, fmt.Sprintf("tmp/%v.bin", i))
+		if err != nil {
+			lib.Log().Error("请求测速文件失败：%v", err.Error())
+		}
+	}
 	KillProcess()
 }
 
@@ -59,6 +70,7 @@ func KillProcess() {
 	//删除配置文件
 	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.json", dir)).Output()
 	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.pb", dir)).Output()
+	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\tmp\\*.bin", dir)).Output()
 }
 
 func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err error) {
@@ -134,7 +146,6 @@ func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err
 	wg.Add(1)
 	go func() {
 		proxy, err = ExecV2rayCore(index, 2000+index, name)
-		//fmt.Printf(proxy)
 	}()
 	return
 }
@@ -149,17 +160,20 @@ func ExecV2rayCore(index int, port int, name string) (proxy string, err error) {
 		return
 	}
 	//lib.Log().Info("启动v2ray成功，PID为：%v，节点为：%v\n", r.Process.Pid, name)
-	r, err := lib.Request("https://www.google.com", fmt.Sprintf("socks5://127.0.0.1:%v", port))
+	r, err := lib.Request("https://www.google.com", fmt.Sprintf("socks5://127.0.0.1:%v", port), 5*time.Second)
 	if err != nil {
-		lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())
+		//lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())
 		return
 	}
-	ipBody, err := lib.Request("https://myip.ipip.net/", r.Proxy)
+	ipBody, err := lib.Request("https://myip.ipip.net/", r.Proxy, 5*time.Second)
 	if err != nil {
 		lib.Log().Error("获取节点：[%v] ip失败:\n%v", name, err.Error())
 		return
 	}
 	lib.Log().Info("节点连接成功：[%v]，请求次数：%v，耗时：%v\n%v", name, 6-r.Retries, r.Duration, ipBody.Body)
-	proxy = r.Proxy
+	proxySlice = append(proxySlice, proxyNode{
+		Name:  name,
+		Proxy: proxy,
+	})
 	return
 }

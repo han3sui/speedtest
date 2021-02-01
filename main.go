@@ -53,9 +53,9 @@ func main() {
 		}
 	}
 	wg.Wait()
-	for i, v := range proxySlice {
+	for _, v := range proxySlice {
 		lib.Log().Info("测速节点：[%v]", v.Name)
-		err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy, fmt.Sprintf("tmp/%v.bin", i))
+		_, _, err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy)
 		if err != nil {
 			lib.Log().Error("请求测速文件失败：%v", err.Error())
 		}
@@ -75,7 +75,7 @@ func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err
 	configDir := fmt.Sprintf("%v/client/config/%v.json", dir, index)
 	add := fmt.Sprintf("%v", node["add"])
 	aid := fmt.Sprintf("%v", node["aid"])
-	host := fmt.Sprintf("%v", node["host"])
+	//host := fmt.Sprintf("%v", node["host"])
 	id := fmt.Sprintf("%v", node["id"])
 	net := fmt.Sprintf("%v", node["net"])
 	path := fmt.Sprintf("%v", node["path"])
@@ -129,7 +129,7 @@ func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err
     }
   }
 }
-`, 2000+index, add, port, id, aid, net, host, path)
+`, 2000+index, add, port, id, aid, net, "", path)
 	err = ioutil.WriteFile(configDir, []byte(tmp), 0644)
 	if err != nil {
 		lib.Log().Error("配置文件创建失败[%v]\n%v", name, err.Error())

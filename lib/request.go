@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -23,8 +24,14 @@ type Response struct {
 
 type Reader struct {
 	io.Reader
-	Total   int
-	Current int
+	Total      int
+	Current    int
+	LastWtn    int
+	Written    int
+	Max        int
+	Avg        int
+	SpeedSlice []int
+	Ticker     *time.Ticker
 }
 
 func Request(url string, proxy string, timeout time.Duration) (response *Response, err error) {
@@ -61,14 +68,10 @@ func Request(url string, proxy string, timeout time.Duration) (response *Respons
 	return
 }
 
-var lastWtn int
-var written int
-var ticker *time.Ticker
-
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.Reader.Read(p)
 	//已写入数据总量
-	written += n
+	r.Written += n
 	//fmt.Printf("时间：%v，本次数据量：%v，已写入数据量：%v，错误：%v\n", time.Now().Format("2006-01-02 15:04:05"), n, written, err)
 loop:
 	for {
@@ -76,11 +79,16 @@ loop:
 			break loop
 		}
 		select {
-		case <-ticker.C:
-			speed := written - lastWtn
-			fmt.Printf("\r时间：%v，完成：%.2f%%", time.Now().Format("2006-01-02 15:04:05"), float64(written*10000/r.Total)/100)
-			fmt.Printf("，速度：%v/s\n", BytesToSize(speed))
-			lastWtn = written
+		case <-r.Ticker.C:
+			speed := r.Written - r.LastWtn
+			//fmt.Printf("\r时间：%v，完成：%.2f%%", time.Now().Format("2006-01-02 15:04:05"), float64(r.Written*10000/r.Total)/100)
+			//fmt.Printf("，速度：%v/s\n", BytesToSize(speed))
+			r.SpeedSlice = append(r.SpeedSlice, speed)
+			sort.SliceStable(r.SpeedSlice, func(i, j int) bool {
+				return r.SpeedSlice[i] > r.SpeedSlice[j]
+			})
+			fmt.Printf("\r时间：%v，完成：%.2f%%，平均下载速度：%v/s，最大下载速度：%v/s", time.Now().Format("2006-01-02 15:04:05"), float64(r.Written*10000/r.Total)/100, BytesToSize(r.Written/len(r.SpeedSlice)), BytesToSize(r.SpeedSlice[0]))
+			r.LastWtn = r.Written
 			break loop
 		default:
 			break loop
@@ -89,11 +97,7 @@ loop:
 	return
 }
 
-func Download(url string, proxy string, filename string) (err error) {
-	written = 0
-	lastWtn = 0
-	ticker = time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+func Download(url string, proxy string) (max string, avg string, err error) {
 	client, err := CreateClient(proxy, 15*time.Second)
 	if err != nil {
 		return
@@ -110,12 +114,20 @@ func Download(url string, proxy string, filename string) (err error) {
 			rError = err
 			retries = retries - 1
 		} else {
-			defer r.Body.Close()
 			reader := &Reader{
-				Reader: r.Body,
-				Total:  int(r.ContentLength),
+				Reader:     r.Body,
+				Total:      int(r.ContentLength),
+				Written:    0,
+				LastWtn:    0,
+				Ticker:     time.NewTicker(1 * time.Second),
+				SpeedSlice: []int{},
 			}
+			defer func() {
+				_ = r.Body.Close()
+				reader.Ticker.Stop()
+			}()
 			_, _ = io.Copy(ioutil.Discard, reader)
+			fmt.Printf("\n\n")
 			break
 		}
 	}

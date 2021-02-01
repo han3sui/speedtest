@@ -32,7 +32,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("获取项目路径出错：%v\n", err.Error()))
 	}
-	r, err := lib.Request("https://sub.wild233.cf/link/20D8L4YfgsoR9WeB?sub=3", "", 5*time.Second)
+	r, err := lib.Request("https://sub.wild233.cf/link/20D8L4YfgsoR9WeB?sub=3", "", 15*time.Second)
 	if err != nil {
 		panic(fmt.Sprintf("获取节点订阅出错：%v\n", err.Error()))
 	}

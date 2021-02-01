@@ -54,7 +54,6 @@ func main() {
 	}
 	wg.Wait()
 	for i, v := range proxySlice {
-		//fmt.Printf("%v\n",v)
 		lib.Log().Info("测速节点：[%v]", v.Name)
 		err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy, fmt.Sprintf("tmp/%v.bin", i))
 		if err != nil {
@@ -65,11 +64,10 @@ func main() {
 }
 
 func KillProcess() {
-	//结束v2ray进程
-	_, _ = exec.Command("cmd", "/c", "taskkill", "/f", "/im", "v2ray.exe").Output()
+	//结束代理进程
+	_, _ = exec.Command("cmd", "/c", "taskkill", "/f", "/im", "xray.exe").Output()
 	//删除配置文件
 	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.json", dir)).Output()
-	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.pb", dir)).Output()
 }
 
 func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err error) {
@@ -137,28 +135,23 @@ func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err
 		lib.Log().Error("配置文件创建失败[%v]\n%v", name, err.Error())
 		return
 	}
-	err = exec.Command("cmd", "/c", fmt.Sprintf("%v\\client\\%v\\v2ctl.exe config %v\\client\\config\\%v.json > %v\\client\\config\\%v.pb", dir, goos, dir, index, dir, index)).Run()
-	if err != nil {
-		lib.Log().Error("启动v2ray失败[%v]\n%v", name, err.Error())
-		return
-	}
 	wg.Add(1)
 	go func() {
-		proxy, err = ExecV2rayCore(index, 2000+index, name)
+		proxy, err = ExecProxyCore(index, 2000+index, name)
 	}()
 	return
 }
 
-func ExecV2rayCore(index int, port int, name string) (proxy string, err error) {
+func ExecProxyCore(index int, port int, name string) (proxy string, err error) {
 	defer wg.Done()
-	cmd := fmt.Sprintf("%v/client/%v/v2ray.exe -config=%v/client/config/%v.pb -format=pb", dir, goos, dir, index)
+	cmd := fmt.Sprintf("%v/client/%v/xray.exe -config=%v/client/config/%v.json", dir, goos, dir, index)
 	cmdR := exec.Command("cmd", "/c", cmd)
 	err = cmdR.Start()
 	if err != nil {
-		lib.Log().Error("启动v2ray出错：%v\n%v\n%v", index, err.Error(), cmdR.Args)
+		lib.Log().Error("启动代理客户端出错：%v\n%v\n%v", index, err.Error(), cmdR.Args)
 		return
 	}
-	//lib.Log().Info("启动v2ray成功，PID为：%v，节点为：%v\n", r.Process.Pid, name)
+	//lib.Log().Info("启动代理客户端成功，PID为：%v，节点为：%v\n", r.Process.Pid, name)
 	r, err := lib.Request("https://www.google.com", fmt.Sprintf("socks5://127.0.0.1:%v", port), 5*time.Second)
 	if err != nil {
 		//lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())

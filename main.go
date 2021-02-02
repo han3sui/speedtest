@@ -3,10 +3,12 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"strings"
 	"sync"
@@ -16,7 +18,7 @@ import (
 
 var dir string
 var wg sync.WaitGroup
-var goos string
+var clientPath string
 
 type proxyNode struct {
 	Name  string
@@ -26,15 +28,38 @@ type proxyNode struct {
 var proxySlice []proxyNode
 
 func main() {
+	go GetSingle()
 	var err error
-	goos = runtime.GOOS
 	dir, err = os.Getwd()
 	if err != nil {
-		panic(fmt.Sprintf("获取项目路径出错：%v\n", err.Error()))
+		lib.Log().Error("获取项目路径出错：%v\n", err.Error())
+		os.Exit(0)
 	}
-	r, err := lib.Request("https://sub.wild233.cf/link/20D8L4YfgsoR9WeB?sub=3", "", 15*time.Second)
+	if runtime.GOARCH == "amd64" {
+		if runtime.GOOS == "windows" {
+			clientPath = fmt.Sprintf("%v/client/xray.exe", dir)
+		}
+		if runtime.GOOS == "linux" {
+			clientPath = fmt.Sprintf("%v/client/xray-linux64", dir)
+		}
+	}
+	if runtime.GOARCH == "arm64" && runtime.GOOS == "linux" {
+		clientPath = fmt.Sprintf("%v/client/xray-arm64", dir)
+	}
+	if clientPath == "" {
+		lib.Log().Error("目前仅支持windows 64位，linux 64位系统")
+		os.Exit(0)
+	}
+	err = lib.CreatePath(fmt.Sprintf("%v/client/config", dir))
 	if err != nil {
-		panic(fmt.Sprintf("获取节点订阅出错：%v\n", err.Error()))
+		lib.Log().Error("创建配置文件夹失败")
+		os.Exit(0)
+	}
+	subscribe := CreateFlag()
+	r, err := lib.Request(subscribe, "", 15*time.Second)
+	if err != nil {
+		lib.Log().Error("获取节点订阅出错：\n%v", err.Error())
+		os.Exit(0)
 	}
 	base64DecodeC, _ := base64.StdEncoding.DecodeString(r.Body)
 	sliceBase64 := strings.Split(string(base64DecodeC), "\n")
@@ -61,6 +86,43 @@ func main() {
 		}
 	}
 	KillProcess()
+}
+
+func GetSingle() {
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan)
+	select {
+	case <-sigChan:
+		KillProcess()
+		os.Exit(1)
+	}
+}
+
+func CreateFlag() string {
+	var (
+		subscribe string
+		h         bool
+	)
+	flag.StringVar(&subscribe, "u", "", "vmess订阅链接地址")
+	flag.BoolVar(&h, "h", false, "使用说明")
+	flag.Parse()
+	if h {
+		_, _ = fmt.Fprintf(os.Stderr, `v2ray-speedtest version: 1.0.0
+
+Options:
+`)
+		flag.PrintDefaults()
+		os.Exit(0)
+	}
+	if subscribe == "" {
+		if len(flag.Args()) == 0 {
+			lib.Log().Error("请输入订阅地址")
+			os.Exit(0)
+		} else {
+			subscribe = flag.Args()[0]
+		}
+	}
+	return subscribe
 }
 
 func KillProcess() {
@@ -159,7 +221,7 @@ func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err
 
 func ExecProxyCore(index int, port int, name string) (proxy string, err error) {
 	defer wg.Done()
-	cmd := fmt.Sprintf("%v/client/%v/xray.exe -config=%v/client/config/%v.json", dir, goos, dir, index)
+	cmd := fmt.Sprintf("%v -config=%v/client/config/%v.json", clientPath, dir, index)
 	cmdR := exec.Command("cmd", "/c", cmd)
 	err = cmdR.Start()
 	if err != nil {
@@ -169,7 +231,7 @@ func ExecProxyCore(index int, port int, name string) (proxy string, err error) {
 	//lib.Log().Info("启动代理客户端成功，PID为：%v，节点为：%v\n", r.Process.Pid, name)
 	r, err := lib.Request("https://www.google.com", fmt.Sprintf("socks5://127.0.0.1:%v", port), 5*time.Second)
 	if err != nil {
-		//lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())
+		lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())
 		return
 	}
 	ipBody, err := lib.Request("https://myip.ipip.net/", r.Proxy, 5*time.Second)

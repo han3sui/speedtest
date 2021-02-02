@@ -70,6 +70,21 @@ func KillProcess() {
 	_, _ = exec.Command("cmd", "/c", "del", fmt.Sprintf("%v\\client\\config\\*.json", dir)).Output()
 }
 
+//{
+//"v": "2",                                       // vmess:// 版本
+//"ps": "aliasName",                              // 自定义名称
+//"add": "111.111.111.111",                       // 服务器域名或 IP
+//"port": "32000",                                // 端口号
+//"id": "1386f85e-657b-4d6e-9d56-78badb75e1fd",   // VMess UID
+//"aid": "100",                                   // VMess AlterID
+//"net": "tcp",                                   // 传输设置 tcp\kcp\ws\h2\quic
+//"type": "none",                                 // 伪装设置 none\http\srtp\utp\wechat-video
+//"host": "www.bbb.com",                          // host (HTTP, WS, H2) 或 security (QUIC)
+//"path": "/",                                    // path (WS, H2) 或 key (QUIC)
+//"tls": "tls"                                    // tls 设置
+//}
+//VMess:// 协议格式
+//vmess:// + BASE64Encode(以上JSON)
 func CreateConfigFile(index int, node map[string]interface{}) (proxy string, err error) {
 	name := strings.TrimSpace(fmt.Sprintf("%v", node["ps"]))
 	configDir := fmt.Sprintf("%v/client/config/%v.json", dir, index)

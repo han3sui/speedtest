@@ -18,7 +18,6 @@ type Response struct {
 	Body     string
 	Duration time.Duration
 	Retries  int
-	Client   *http.Client
 	Proxy    string
 }
 
@@ -36,7 +35,7 @@ type Reader struct {
 
 func Request(url string, proxy string, timeout time.Duration) (response *Response, err error) {
 	response = new(Response)
-	response.Client, err = CreateClient(proxy, timeout)
+	client, err := CreateClient(proxy, timeout)
 	if err != nil {
 		return
 	}
@@ -48,7 +47,7 @@ func Request(url string, proxy string, timeout time.Duration) (response *Respons
 	response.Retries = 5
 	var rError error
 	for response.Retries > 0 {
-		r, err := response.Client.Do(request)
+		r, err := client.Do(request)
 		if err != nil {
 			rError = err
 			response.Retries = response.Retries - 1

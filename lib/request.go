@@ -53,9 +53,11 @@ func Request(url string, proxy string, timeout time.Duration) (response *Respons
 			rError = err
 			response.Retries = response.Retries - 1
 		} else {
+			defer func() {
+				_ = r.Body.Close()
+			}()
 			response.Duration = time.Since(start)
 			bodyByte, _ := ioutil.ReadAll(r.Body)
-			_ = r.Body.Close()
 			response.Body = string(bodyByte)
 			response.Proxy = proxy
 			break

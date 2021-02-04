@@ -124,6 +124,7 @@ func main() {
 			lib.Log().Error("请求测速文件失败：%v", err.Error())
 		}
 	}
+	lib.Log().Info("测速结束！！！")
 	KillProcess()
 }
 

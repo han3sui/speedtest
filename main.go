@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"v2ray-speedtest/lib"
 )
@@ -67,7 +68,7 @@ func main() {
 	}
 	subscribe := CreateFlag()
 	lib.Log().Info("正在请求订阅，请等待...")
-	r, err := lib.Request(subscribe, "", 15*time.Second)
+	r, err := lib.Request(subscribe, "", 0)
 	if err != nil {
 		lib.Log().Error("获取订阅出错：\n%v", err.Error())
 		os.Exit(0)
@@ -105,15 +106,15 @@ func main() {
 	}
 	fileWg.Wait()
 	lib.Log().Info("开始谷歌连接检查...")
-	var gooWg sync.WaitGroup
+	var googleWg sync.WaitGroup
 	for _, v := range proxySliceTmp {
 		v1 := v
-		gooWg.Add(1)
+		googleWg.Add(1)
 		go func() {
-			CurlGoogle(v1.Proxy, v1.Name, &gooWg)
+			CurlGoogle(v1.Proxy, v1.Name, &googleWg)
 		}()
 	}
-	gooWg.Wait()
+	googleWg.Wait()
 	lib.Log().Info("开始下载速度测试...")
 	for _, v := range proxySlice {
 		lib.Log().Info("测速节点：[%v]", v.Name)
@@ -128,9 +129,10 @@ func main() {
 //捕获用户主动退出
 func GetSingle() {
 	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan)
+	signal.Notify(sigChan,syscall.SIGHUP,syscall.SIGUSR1,syscall.SIGUSR2,syscall.SIGINT,syscall.SIGTERM,syscall.SIGTSTP)
 	select {
 	case <-sigChan:
+		lib.Log().Warning("接收到退出信号，即将清理进程并退出！！！")
 		KillProcess()
 		fmt.Printf("\n")
 		os.Exit(1)
@@ -282,8 +284,8 @@ func ExecProxyCore(jsonPath string, name string) (err error) {
 }
 
 //测试节点连接情况
-func CurlGoogle(proxy string, name string, gooWg *sync.WaitGroup) {
-	defer gooWg.Done()
+func CurlGoogle(proxy string, name string, googleWg *sync.WaitGroup) {
+	defer googleWg.Done()
 	r, err := lib.Request("https://www.google.com", proxy, 5*time.Second)
 	if err != nil {
 		lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())

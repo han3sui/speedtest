@@ -1,4 +1,5 @@
 package lib
+
 import (
 	"fmt"
 	"github.com/fatih/color"
@@ -44,11 +45,16 @@ var spaces = map[string]string{
 	"Debug":   "  ",
 }
 
+//退出信号
+var SignalOut bool
+
 // Println 打印
 func (ll *Logger) Println(prefix string, msg string) {
 	// TODO Release时去掉
 	// color.NoColor = false
-
+	if SignalOut {
+		return
+	}
 	c := color.New()
 
 	ll.mu.Lock()

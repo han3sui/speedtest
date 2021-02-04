@@ -126,13 +126,15 @@ func main() {
 	KillProcess()
 }
 
-//捕获用户主动退出
+//捕获退出信号
 func GetSingle() {
 	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan,syscall.SIGHUP,syscall.SIGUSR1,syscall.SIGUSR2,syscall.SIGINT,syscall.SIGTERM,syscall.SIGTSTP)
+	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-sigChan:
+		fmt.Printf("\n")
 		lib.Log().Warning("接收到退出信号，即将清理进程并退出！！！")
+		lib.SignalOut = true
 		KillProcess()
 		fmt.Printf("\n")
 		os.Exit(1)
@@ -173,7 +175,7 @@ func KillProcess() {
 	_, _ = exec.Command(commandUse, commandArg, "taskkill", "/f", "/im", "xray.exe").Output()
 	_, _ = exec.Command(commandUse, commandArg, "ps aux|grep 'xray'|awk '{print $2}'|xargs kill -9").Output()
 	//删除配置文件
-	_ = os.RemoveAll("client/config/")
+	_ = os.RemoveAll("client/config")
 }
 
 //{

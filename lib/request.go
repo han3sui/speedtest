@@ -79,16 +79,19 @@ loop:
 		if err != nil {
 			break loop
 		}
+		if r.LastWtn-r.Total == 0 {
+			break loop
+		}
 		select {
 		case <-r.Ticker.C:
 			speed := r.Written - r.LastWtn
-			//fmt.Printf("\r时间：%v，完成：%.2f%%", time.Now().Format("2006-01-02 15:04:05"), float64(r.Written*10000/r.Total)/100)
-			//fmt.Printf("，速度：%v/s\n", BytesToSize(speed))
 			r.SpeedSlice = append(r.SpeedSlice, speed)
 			sort.SliceStable(r.SpeedSlice, func(i, j int) bool {
 				return r.SpeedSlice[i] > r.SpeedSlice[j]
 			})
-			fmt.Printf("\r时间：%v，完成：%.2f%%，平均下载速度：%v/s，最大下载速度：%v/s", time.Now().Format("2006-01-02 15:04:05"), float64(r.Written*10000/r.Total)/100, BytesToSize(r.Written/len(r.SpeedSlice)), BytesToSize(r.SpeedSlice[0]))
+			r.Avg = r.Written / len(r.SpeedSlice)
+			r.Max = r.SpeedSlice[0]
+			fmt.Printf("\r时间：%v，完成：%.2f%%，平均下载速度：%v/s，最大下载速度：%v/s", time.Now().Format("2006-01-02 15:04:05"), float64(r.Written*10000/r.Total)/100, BytesToSize(r.Avg), BytesToSize(r.Max))
 			r.LastWtn = r.Written
 			break loop
 		default:
@@ -98,8 +101,8 @@ loop:
 	return
 }
 
-func Download(url string, proxy string) (max string, avg string, err error) {
-	client, err := CreateClient(proxy, 15*time.Second)
+func Download(url string, proxy string) (avg int, max int, err error) {
+	client, err := CreateClient(proxy, 8*time.Second)
 	if err != nil {
 		return
 	}
@@ -124,6 +127,8 @@ func Download(url string, proxy string) (max string, avg string, err error) {
 				SpeedSlice: []int{},
 			}
 			defer func() {
+				max = reader.Max
+				avg = reader.Avg
 				_ = r.Body.Close()
 				reader.Ticker.Stop()
 			}()

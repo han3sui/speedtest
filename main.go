@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,8 +24,8 @@ var clientPath string
 type ProxyNode struct {
 	Name         string                 //节点名称
 	Proxy        string                 //启动代理的地址
-	AvgSpeed     int                    //平均下载速度
-	MaxSpeed     int                    //最大下载速度
+	AvgSpeed     string                 //平均下载速度
+	MaxSpeed     string                 //最大下载速度
 	Ping         time.Duration          //ping谷歌时长
 	Status       bool                   //代理状态
 	RealIp       string                 //真实IP
@@ -129,14 +130,29 @@ func main() {
 	}
 	googleWg.Wait()
 	lib.Log().Info("开始下载速度测试...")
-	for _, v := range ProxySlice {
-		lib.Log().Info("测速节点：[%v]", v.Name)
-		_, _, err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy)
-		if err != nil {
-			lib.Log().Error("请求测速文件失败：%v", err.Error())
+	for i, v := range ProxySlice {
+		if v.Status {
+			lib.Log().Info("测速节点：[%v]", v.Name)
+			//http://repos.mia.lax-noc.com/speedtests/
+			//http://cachefly.cachefly.net/100mb.test
+			//http://mirror.hk.leaseweb.net/speedtest/10000mb.bin
+			avg, max, err := lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy)
+			ProxySlice[i].MaxSpeed = lib.BytesToSize(max)
+			ProxySlice[i].AvgSpeed = lib.BytesToSize(avg)
+			if err != nil {
+				lib.Log().Error("请求测速文件失败：%v", err.Error())
+			}
 		}
 	}
-	lib.Log().Info("测速结束！！！")
+	lib.Log().Info("---------------可用节点测速结果，谷歌延迟[高->低]排序！！！---------------")
+	sort.SliceStable(ProxySlice, func(i, j int) bool {
+		return ProxySlice[i].Ping > ProxySlice[j].Ping
+	})
+	for _, v := range ProxySlice {
+		if v.Status {
+			fmt.Printf("节点：%v\n谷歌延迟：%v\n平均下载速度：%v\n最高下载速度：%v\nIP：%v\n", v.Name, v.Ping, v.AvgSpeed, v.MaxSpeed, v.RealIp)
+		}
+	}
 	KillProcess()
 }
 

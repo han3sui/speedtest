@@ -20,13 +20,20 @@ import (
 var dir string
 var clientPath string
 
-type proxyNode struct {
-	Name  string
-	Proxy string
+type ProxyNode struct {
+	Name         string                 //节点名称
+	Proxy        string                 //启动代理的地址
+	AvgSpeed     int                    //平均下载速度
+	MaxSpeed     int                    //最大下载速度
+	Ping         time.Duration          //ping谷歌时长
+	Status       bool                   //代理状态
+	RealIp       string                 //真实IP
+	ErrorMessage string                 //出错原因
+	Retries      int                    //连接重试次数
+	Detail       map[string]interface{} //序列化map详情
 }
 
-var proxySlice []proxyNode
-var proxySliceTmp []proxyNode
+var ProxySlice []ProxyNode
 
 var commandUse string
 var commandArg string
@@ -80,7 +87,6 @@ func main() {
 		os.Exit(0)
 	}
 	sliceBase64 := strings.Split(string(base64DecodeC), "\n")
-	var nodeList []map[string]interface{}
 	for _, v := range sliceBase64 {
 		if strings.Contains(v, "vmess://") {
 			s := strings.Replace(v, "vmess://", "", -1)
@@ -90,34 +96,40 @@ func main() {
 			if err != nil {
 				lib.Log().Error("序列化节点出错：%v", v)
 			} else {
-				nodeList = append(nodeList, sMap)
+				ProxySlice = append(ProxySlice, ProxyNode{
+					Detail: sMap,
+					Status: true,
+				})
 			}
 		}
 	}
 	lib.Log().Info("开始创建配置文件...")
 	var fileWg sync.WaitGroup
-	for i, v := range nodeList {
+	for i, v := range ProxySlice {
 		i1 := i
 		v1 := v
 		fileWg.Add(1)
 		go func() {
-			_ = CreateConfigFile(i1, v1, &fileWg)
+			_ = CreateConfigFile(i1, &v1, &fileWg)
 		}()
 	}
 	fileWg.Wait()
 	time.Sleep(3 * time.Second)
 	lib.Log().Info("开始谷歌连接检查...")
 	var googleWg sync.WaitGroup
-	for _, v := range proxySliceTmp {
-		v1 := v
-		googleWg.Add(1)
-		go func() {
-			CurlGoogle(v1.Proxy, v1.Name, &googleWg)
-		}()
+	for i, v := range ProxySlice {
+		if v.Status {
+			i1 := i
+			v1 := v
+			googleWg.Add(1)
+			go func() {
+				CurlGoogle(i1, &v1, &googleWg)
+			}()
+		}
 	}
 	googleWg.Wait()
 	lib.Log().Info("开始下载速度测试...")
-	for _, v := range proxySlice {
+	for _, v := range ProxySlice {
 		lib.Log().Info("测速节点：[%v]", v.Name)
 		_, _, err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy)
 		if err != nil {
@@ -196,17 +208,18 @@ func KillProcess() {
 //VMess:// 协议格式
 //vmess:// + BASE64Encode(以上JSON)
 //创建配置文件
-func CreateConfigFile(index int, node map[string]interface{}, fileWg *sync.WaitGroup) (err error) {
+func CreateConfigFile(index int, node *ProxyNode, fileWg *sync.WaitGroup) (err error) {
 	defer fileWg.Done()
-	name := strings.TrimSpace(fmt.Sprintf("%v", node["ps"]))
+	name := strings.TrimSpace(fmt.Sprintf("%v", node.Detail["ps"]))
+	ProxySlice[index].Name = name
 	configDir := fmt.Sprintf("%v/client/config/%v.json", dir, index)
-	add := fmt.Sprintf("%v", node["add"])
-	aid := fmt.Sprintf("%v", node["aid"])
+	add := fmt.Sprintf("%v", node.Detail["add"])
+	aid := fmt.Sprintf("%v", node.Detail["aid"])
 	//host := fmt.Sprintf("%v", node["host"])
-	id := fmt.Sprintf("%v", node["id"])
-	net := fmt.Sprintf("%v", node["net"])
-	path := fmt.Sprintf("%v", node["path"])
-	port := fmt.Sprintf("%v", node["port"])
+	id := fmt.Sprintf("%v", node.Detail["id"])
+	net := fmt.Sprintf("%v", node.Detail["net"])
+	path := fmt.Sprintf("%v", node.Detail["path"])
+	port := fmt.Sprintf("%v", node.Detail["port"])
 	tmp := fmt.Sprintf(`
 {
   "inbound": {
@@ -260,16 +273,17 @@ func CreateConfigFile(index int, node map[string]interface{}, fileWg *sync.WaitG
 	err = ioutil.WriteFile(configDir, []byte(tmp), 0644)
 	if err != nil {
 		lib.Log().Error("配置文件创建失败[%v]\n%v", name, err.Error())
+		ProxySlice[index].ErrorMessage = err.Error()
+		ProxySlice[index].Status = false
 		return
 	}
 	err = ExecProxyCore(fmt.Sprintf("%v/client/config/%v.json", dir, index), name)
 	if err != nil {
+		ProxySlice[index].ErrorMessage = err.Error()
+		ProxySlice[index].Status = false
 		return
 	}
-	proxySliceTmp = append(proxySliceTmp, proxyNode{
-		Name:  name,
-		Proxy: fmt.Sprintf("socks5://127.0.0.1:%v", 40000+index),
-	})
+	ProxySlice[index].Proxy = fmt.Sprintf("socks5://127.0.0.1:%v", 40000+index)
 	return
 }
 
@@ -286,22 +300,25 @@ func ExecProxyCore(jsonPath string, name string) (err error) {
 }
 
 //测试节点连接情况
-func CurlGoogle(proxy string, name string, googleWg *sync.WaitGroup) {
+func CurlGoogle(index int, node *ProxyNode, googleWg *sync.WaitGroup) {
 	defer googleWg.Done()
-	r, err := lib.Request("https://www.google.com", proxy, 5*time.Second)
+	r, err := lib.Request("https://www.google.com", node.Proxy, 5*time.Second)
 	if err != nil {
-		lib.Log().Error("节点连接失败：[%v]\n%v", name, err.Error())
+		lib.Log().Error("节点连接失败：[%v]\n%v", node.Name, err.Error())
+		ProxySlice[index].ErrorMessage = err.Error()
+		ProxySlice[index].Status = false
 		return
 	}
 	ipBody, err := lib.Request("https://myip.ipip.net/", r.Proxy, 5*time.Second)
 	if err != nil {
-		lib.Log().Info("节点连接成功：[%v]，请求次数：%v，耗时：%v，获取IP信息失败：\n%v", name, 6-r.Retries, r.Duration, err.Error())
+		lib.Log().Info("节点连接成功：[%v]，请求次数：%v，耗时：%v，获取IP信息失败：\n%v", node.Name, 6-r.Retries, r.Duration, err.Error())
+		ProxySlice[index].ErrorMessage = err.Error()
 	} else {
-		lib.Log().Info("节点连接成功：[%v]，请求次数：%v，耗时：%v，IP信息：\n%v", name, 6-r.Retries, r.Duration, ipBody.Body)
+		lib.Log().Info("节点连接成功：[%v]，请求次数：%v，耗时：%v，IP信息：\n%v", node.Name, 6-r.Retries, r.Duration, ipBody.Body)
+		ProxySlice[index].RealIp = ipBody.Body
 	}
-	proxySlice = append(proxySlice, proxyNode{
-		Name:  name,
-		Proxy: proxy,
-	})
+	ProxySlice[index].Ping = r.Duration
+	ProxySlice[index].Retries = 6 - r.Retries
+	ProxySlice[index].Status = true
 	return
 }

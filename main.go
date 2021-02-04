@@ -105,6 +105,7 @@ func main() {
 		}()
 	}
 	fileWg.Wait()
+	time.Sleep(3 * time.Second)
 	lib.Log().Info("开始谷歌连接检查...")
 	var googleWg sync.WaitGroup
 	for _, v := range proxySliceTmp {
@@ -254,20 +255,19 @@ func CreateConfigFile(index int, node map[string]interface{}, fileWg *sync.WaitG
     }
   }
 }
-`, 2000+index, add, port, id, aid, net, "", path)
+`, 40000+index, add, port, id, aid, net, "", path)
 	err = ioutil.WriteFile(configDir, []byte(tmp), 0644)
 	if err != nil {
 		lib.Log().Error("配置文件创建失败[%v]\n%v", name, err.Error())
 		return
-	} else {
-		err = ExecProxyCore(fmt.Sprintf("%v/client/config/%v.json", dir, index), name)
-		if err != nil {
-			return
-		}
+	}
+	err = ExecProxyCore(fmt.Sprintf("%v/client/config/%v.json", dir, index), name)
+	if err != nil {
+		return
 	}
 	proxySliceTmp = append(proxySliceTmp, proxyNode{
 		Name:  name,
-		Proxy: fmt.Sprintf("socks5://127.0.0.1:%v", 2000+index),
+		Proxy: fmt.Sprintf("socks5://127.0.0.1:%v", 40000+index),
 	})
 	return
 }
@@ -279,8 +279,7 @@ func ExecProxyCore(jsonPath string, name string) (err error) {
 	err = cmdR.Start()
 	if err != nil {
 		lib.Log().Error("启动[%v]代理客户端出错：%v\n%v\n%v", name, err.Error(), cmdR.Args)
-	} else {
-		//fmt.Printf("%v\n",cmdR.Process.Pid)
+		return
 	}
 	return
 }

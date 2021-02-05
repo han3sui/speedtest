@@ -24,8 +24,8 @@ var clientPath string
 type ProxyNode struct {
 	Name         string                 //节点名称
 	Proxy        string                 //启动代理的地址
-	AvgSpeed     string                 //平均下载速度
-	MaxSpeed     string                 //最大下载速度
+	AvgSpeed     int                    //平均下载速度
+	MaxSpeed     int                    //最大下载速度
 	Ping         time.Duration          //ping谷歌时长
 	Status       bool                   //代理状态
 	RealIp       string                 //真实IP
@@ -136,9 +136,7 @@ func main() {
 			//http://repos.mia.lax-noc.com/speedtests/
 			//http://cachefly.cachefly.net/100mb.test
 			//http://mirror.hk.leaseweb.net/speedtest/10000mb.bin
-			avg, max, err := lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy)
-			ProxySlice[i].MaxSpeed = lib.BytesToSize(max)
-			ProxySlice[i].AvgSpeed = lib.BytesToSize(avg)
+			ProxySlice[i].AvgSpeed, ProxySlice[i].MaxSpeed, err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy)
 			if err != nil {
 				lib.Log().Error("请求测速文件失败：%v", err.Error())
 			}
@@ -150,7 +148,7 @@ func main() {
 	})
 	for _, v := range ProxySlice {
 		if v.Status {
-			fmt.Printf("节点：%v\n谷歌延迟：%v\n平均下载速度：%v\n最高下载速度：%v\nIP：%v\n", v.Name, v.Ping, v.AvgSpeed, v.MaxSpeed, v.RealIp)
+			fmt.Printf("节点：%v\n谷歌延迟：%v\n平均下载速度：%v\n最高下载速度：%v\nIP：%v\n", v.Name, v.Ping, lib.BytesToSize(v.AvgSpeed), lib.BytesToSize(v.MaxSpeed), v.RealIp)
 		}
 	}
 	lib.Log().Info("---------------以上为测速结果，根据平均下载速度[低->高]排序！！！---------------")

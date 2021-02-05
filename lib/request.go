@@ -102,7 +102,7 @@ loop:
 }
 
 func Download(url string, proxy string) (avg int, max int, err error) {
-	client, err := CreateClient(proxy, 8*time.Second)
+	client, err := CreateClient(proxy, 15*time.Second)
 	if err != nil {
 		return
 	}

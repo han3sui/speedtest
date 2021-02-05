@@ -144,15 +144,16 @@ func main() {
 			}
 		}
 	}
-	lib.Log().Info("---------------可用节点测速结果，谷歌延迟[高->低]排序！！！---------------")
+	lib.Log().Info("---------------可用节点测速结果---------------")
 	sort.SliceStable(ProxySlice, func(i, j int) bool {
-		return ProxySlice[i].Ping > ProxySlice[j].Ping
+		return ProxySlice[i].AvgSpeed < ProxySlice[j].AvgSpeed
 	})
 	for _, v := range ProxySlice {
 		if v.Status {
 			fmt.Printf("节点：%v\n谷歌延迟：%v\n平均下载速度：%v\n最高下载速度：%v\nIP：%v\n", v.Name, v.Ping, v.AvgSpeed, v.MaxSpeed, v.RealIp)
 		}
 	}
+	lib.Log().Info("---------------以上为测速结果，根据平均下载速度[低->高]排序！！！---------------")
 	KillProcess()
 }
 
@@ -231,7 +232,7 @@ func CreateConfigFile(index int, node *ProxyNode, fileWg *sync.WaitGroup) (err e
 	configDir := fmt.Sprintf("%v/client/config/%v.json", dir, index)
 	add := fmt.Sprintf("%v", node.Detail["add"])
 	aid := fmt.Sprintf("%v", node.Detail["aid"])
-	//host := fmt.Sprintf("%v", node["host"])
+	host := fmt.Sprintf("%v", node.Detail["host"])
 	id := fmt.Sprintf("%v", node.Detail["id"])
 	net := fmt.Sprintf("%v", node.Detail["net"])
 	path := fmt.Sprintf("%v", node.Detail["path"])
@@ -285,7 +286,7 @@ func CreateConfigFile(index int, node *ProxyNode, fileWg *sync.WaitGroup) (err e
     }
   }
 }
-`, 40000+index, add, port, id, aid, net, "", path)
+`, 40000+index, add, port, id, aid, net, host, path)
 	err = ioutil.WriteFile(configDir, []byte(tmp), 0644)
 	if err != nil {
 		lib.Log().Error("配置文件创建失败[%v]\n%v", name, err.Error())

@@ -18,9 +18,7 @@ import (
 	"v2ray-speedtest/lib"
 )
 
-var dir string
-var clientPath string
-
+//节点详细信息
 type ProxyNode struct {
 	Name         string                 //节点名称
 	Proxy        string                 //启动代理的地址
@@ -34,9 +32,26 @@ type ProxyNode struct {
 	Detail       map[string]interface{} //序列化map详情
 }
 
+//命令行交互参数
+type Flag struct {
+	Subscribe string //订阅地址
+	Filter    string //筛选参数
+	Help      bool   //调出help
+}
+
+//程序运行路径
+var dir string
+
+//客户端地址
+var clientPath string
+
+//节点切片
 var ProxySlice []ProxyNode
 
+//命令模式，windows和linux
 var commandUse string
+
+//命令参数，windows和linux
 var commandArg string
 
 func main() {
@@ -74,9 +89,9 @@ func main() {
 		lib.Log().Error("创建配置文件夹失败")
 		os.Exit(0)
 	}
-	subscribe := CreateFlag()
+	flags := CreateFlag()
 	lib.Log().Info("正在请求订阅，请等待...")
-	r, err := lib.Request(subscribe, "", 0)
+	r, err := lib.Request(flags.Subscribe, "", 0)
 	if err != nil {
 		lib.Log().Error("获取订阅出错：\n%v", err.Error())
 		os.Exit(0)
@@ -97,10 +112,44 @@ func main() {
 			if err != nil {
 				lib.Log().Error("序列化节点出错：%v", v)
 			} else {
-				ProxySlice = append(ProxySlice, ProxyNode{
-					Detail: sMap,
-					Status: true,
-				})
+				name := strings.TrimSpace(fmt.Sprintf("%v", sMap["ps"]))
+				boolean := true
+				if flags.Filter != "" {
+					b1 := false
+				loop1:
+					for _, v1 := range strings.Split(flags.Filter, "|") {
+						//或条件，满足任何一个关键字，加入节点
+						if !strings.Contains(v1, "&") {
+							//关键字只存在或条件，如果满足任何一个关键字，直接为真，跳出循环
+							if strings.Contains(name, v1) {
+								b1 = true
+								//lib.Log().Info("%v\n%v\n%v", name, v1, boolean)
+								break loop1
+							}
+						} else {
+							//关键字存在与条件，必须满足与条件，才可以为真，跳出循环
+							b2 := true
+						loop2:
+							for _, v2 := range strings.Split(v1, "&") {
+								if !strings.Contains(name, v2) {
+									b2 = false
+									break loop2
+								}
+							}
+							b1 = b2
+							if b2 {
+								break loop1
+							}
+						}
+					}
+					boolean = b1
+				}
+				if boolean {
+					ProxySlice = append(ProxySlice, ProxyNode{
+						Detail: sMap,
+						Status: true,
+					})
+				}
 			}
 		}
 	}
@@ -171,31 +220,27 @@ func GetSingle() {
 }
 
 //创建cli说明
-func CreateFlag() string {
-	var (
-		subscribe string
-		h         bool
-	)
-	flag.StringVar(&subscribe, "u", "", "vmess订阅链接地址")
-	flag.BoolVar(&h, "h", false, "使用说明")
+func CreateFlag() *Flag {
+	var v = new(Flag)
+	flag.BoolVar(&v.Help, "h", false, "使用说明")
+	flag.StringVar(&v.Subscribe, "u", "", "vmess订阅链接")
+	flag.StringVar(&v.Filter, "s", "", "筛选节点，或条件：|，与条件：&")
 	flag.Parse()
-	if h {
-		_, _ = fmt.Fprintf(os.Stderr, `v2ray-speedtest version: 1.0.0
+	if v.Help {
+		_, _ = fmt.Fprintf(os.Stderr, `v2ray-speedtest version：1.0.0
 
 Options:
 `)
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
-	if subscribe == "" {
+	if v.Subscribe == "" {
 		if len(flag.Args()) == 0 {
 			lib.Log().Error("请输入订阅地址")
 			os.Exit(0)
-		} else {
-			subscribe = flag.Args()[0]
 		}
 	}
-	return subscribe
+	return v
 }
 
 //清理代理相关内容

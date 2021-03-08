@@ -2,12 +2,8 @@ name: build
 
 on:
   push:
-    branches:
-      - 'master'
     tags:
-      - 'v*'
-  pull_request:
-
+      - 'v*.*.*'
 jobs:
   build:
     runs-on: ubuntu-latest

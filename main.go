@@ -37,6 +37,7 @@ type Flag struct {
 	Subscribe string //订阅地址
 	Filter    string //筛选参数
 	Help      bool   //调出help
+	Duration  int    //下载测速文件时间
 }
 
 //程序运行路径
@@ -65,26 +66,14 @@ func main() {
 		lib.Log().Error("获取项目路径出错：%v\n", err.Error())
 		os.Exit(0)
 	}
-	if runtime.GOARCH == "amd64" {
-		if runtime.GOOS == "windows" {
-			commandUse = "cmd"
-			commandArg = "/c"
-			clientPath = fmt.Sprintf("%v/client/xray.exe", dir)
-		}
-		if runtime.GOOS == "linux" {
-			commandUse = "sh"
-			commandArg = "-c"
-			clientPath = fmt.Sprintf("%v/client/xray-linux64", dir)
-		}
-	}
-	if runtime.GOARCH == "arm64" && runtime.GOOS == "linux" {
+	if runtime.GOOS == "windows" {
+		commandUse = "cmd"
+		commandArg = "/c"
+		clientPath = fmt.Sprintf("%v/client/xray.exe", dir)
+	} else {
 		commandUse = "sh"
 		commandArg = "-c"
-		clientPath = fmt.Sprintf("%v/client/xray-arm64", dir)
-	}
-	if clientPath == "" {
-		lib.Log().Error("目前仅支持windows 64位，linux 64位系统")
-		os.Exit(0)
+		clientPath = fmt.Sprintf("%v/client/xray", dir)
 	}
 	err = lib.CreatePath(fmt.Sprintf("%v/client/config", dir))
 	if err != nil {
@@ -125,7 +114,6 @@ func main() {
 							//关键字只存在或条件，如果满足任何一个关键字，直接为真，跳出循环
 							if strings.Contains(name, v1) {
 								b1 = true
-								//lib.Log().Info("%v\n%v\n%v", name, v1, boolean)
 								break loop1
 							}
 						} else {
@@ -187,7 +175,7 @@ func main() {
 			//http://repos.mia.lax-noc.com/speedtests/
 			//http://cachefly.cachefly.net/100mb.test
 			//http://mirror.hk.leaseweb.net/speedtest/10000mb.bin
-			ProxySlice[i].AvgSpeed, ProxySlice[i].MaxSpeed, err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy)
+			ProxySlice[i].AvgSpeed, ProxySlice[i].MaxSpeed, err = lib.Download("http://mirror.hk.leaseweb.net/speedtest/10000mb.bin", v.Proxy, flags.Duration)
 			if err != nil {
 				lib.Log().Error("请求测速文件失败：%v", err.Error())
 			}
@@ -226,18 +214,19 @@ func CreateFlag() *Flag {
 	flag.BoolVar(&v.Help, "h", false, "使用说明")
 	flag.StringVar(&v.Subscribe, "u", "", "vmess订阅链接")
 	flag.StringVar(&v.Filter, "s", "", "筛选节点，或条件：|，与条件：&")
+	flag.IntVar(&v.Duration, "d", 15, "测速文件下载时间，单位/秒，默认15秒")
 	flag.Parse()
 	if v.Help {
-		_, _ = fmt.Fprintf(os.Stderr, `v2ray-speedtest version：1.0.0
+		_, _ = fmt.Fprintf(os.Stderr, `机场测速工具，当前版本：1.0.0
 
-Options:
+使用说明:
 `)
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
 	if v.Subscribe == "" {
 		if len(flag.Args()) == 0 {
-			lib.Log().Error("请输入订阅地址")
+			lib.Log().Error("请加参数 -u 输入订阅链接")
 			os.Exit(0)
 		}
 	}

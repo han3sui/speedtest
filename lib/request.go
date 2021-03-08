@@ -107,8 +107,8 @@ loop:
 	return
 }
 
-func Download(url string, proxy string) (avg int, max int, err error) {
-	client, err := CreateClient(proxy, 15*time.Second)
+func Download(url string, proxy string, duration int) (avg int, max int, err error) {
+	client, err := CreateClient(proxy, time.Duration(duration)*time.Second)
 	if err != nil {
 		return
 	}

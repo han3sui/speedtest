@@ -21,6 +21,12 @@ type Response struct {
 	Proxy    string
 }
 
+type RequestInfo struct {
+	FirstByteDuration time.Duration
+	DnsDuration       time.Duration
+	ConnectDuration   time.Duration
+}
+
 type Reader struct {
 	io.Reader
 	Total      int
@@ -39,7 +45,7 @@ func Request(url string, proxy string, timeout time.Duration) (response *Respons
 	if err != nil {
 		return
 	}
-	request, err := CreateRequest(url)
+	request, _, err := CreateRequest(url)
 	if err != nil {
 		return
 	}
@@ -106,7 +112,7 @@ func Download(url string, proxy string) (avg int, max int, err error) {
 	if err != nil {
 		return
 	}
-	request, err := CreateRequest(url)
+	request, _, err := CreateRequest(url)
 	if err != nil {
 		return
 	}
@@ -177,28 +183,28 @@ func CreateClient(proxy string, timeout time.Duration) (client *http.Client, err
 	return
 }
 
-func CreateRequest(url string) (request *http.Request, err error) {
+func CreateRequest(url string) (request *http.Request, info RequestInfo, err error) {
 	request, err = http.NewRequest("GET", url, nil)
 	if err != nil {
 		return
 	}
 	request.Header.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36")
-	var connect, dns time.Time
+	var connect, start, dns time.Time
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(dnsStartInfo httptrace.DNSStartInfo) {
 			dns = time.Now()
 		},
 		DNSDone: func(dnsDoneInfo httptrace.DNSDoneInfo) {
-			//fmt.Printf("DNS DONE: %v\n", time.Since(dns))
+			info.DnsDuration = time.Since(dns)
 		},
 		ConnectStart: func(network, addr string) {
 			connect = time.Now()
 		},
 		ConnectDone: func(network, addr string, err error) {
-			//fmt.Printf("Connect Time: %v\n", time.Since(connect))
+			info.ConnectDuration = time.Since(connect)
 		},
 		GotFirstResponseByte: func() {
-			//fmt.Printf("Time from start to first byte: %v\n", time.Since(start))
+			info.FirstByteDuration = time.Since(start)
 		},
 	}
 	request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))

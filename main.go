@@ -55,7 +55,9 @@ var commandUse string
 var commandArg string
 
 func main() {
-	go GetSingle()
+	go func() {
+		GetSingle()
+	}()
 	KillProcess()
 	var err error
 	dir, err = os.Getwd()
@@ -197,7 +199,7 @@ func main() {
 	})
 	for _, v := range ProxySlice {
 		if v.Status {
-			fmt.Printf("节点：%v\n谷歌延迟：%v\n平均下载速度：%v\n最高下载速度：%v\nIP：%v\n", v.Name, v.Ping, lib.BytesToSize(v.AvgSpeed), lib.BytesToSize(v.MaxSpeed), v.RealIp)
+			fmt.Printf("节点：%v\n谷歌延迟：%v\n重连次数：%v次\n平均下载速度：%v\n最高下载速度：%v\nIP：%v\n", v.Name, v.Ping, v.Retries, lib.BytesToSize(v.AvgSpeed), lib.BytesToSize(v.MaxSpeed), v.RealIp)
 		}
 	}
 	lib.Log().Info("---------------以上为测速结果，根据平均下载速度[低->高]排序！！！---------------")
@@ -206,10 +208,9 @@ func main() {
 
 //捕获退出信号
 func GetSingle() {
-	sigChan := make(chan os.Signal)
+	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
-	select {
-	case <-sigChan:
+	for range sigChan {
 		fmt.Printf("\n")
 		lib.Log().Warning("接收到退出信号，即将清理进程并退出！！！")
 		lib.SignalOut = true
@@ -353,7 +354,7 @@ func ExecProxyCore(jsonPath string, name string) (err error) {
 	cmdR := exec.Command(commandUse, commandArg, cmd)
 	err = cmdR.Start()
 	if err != nil {
-		lib.Log().Error("启动[%v]代理客户端出错：%v\n%v\n%v", name, err.Error(), cmdR.Args)
+		lib.Log().Error("启动[%v]代理客户端出错：%v\n%v", name, err.Error(), cmdR.Args)
 		return
 	}
 	return
@@ -380,5 +381,4 @@ func CurlGoogle(index int, node *ProxyNode, googleWg *sync.WaitGroup) {
 	ProxySlice[index].Ping = r.Duration
 	ProxySlice[index].Retries = 6 - r.Retries
 	ProxySlice[index].Status = true
-	return
 }

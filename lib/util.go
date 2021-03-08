@@ -11,8 +11,5 @@ func CreatePath(path string) (err error) {
 
 func PathExists(path string) bool {
 	_, err := os.Stat(path) //os.Stat获取文件信息
-	if os.IsNotExist(err) {
-		return false
-	}
-	return true
+	return !os.IsNotExist(err)
 }

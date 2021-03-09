@@ -1,4 +1,6 @@
 # 测速工具
+请自行下载系统对应版本`xray`客户端放入`client`目录中，命名规则为`xray`
+> 项目地址：https://github.com/XTLS/Xray-core/releases/
 
 ## 使用说明
 

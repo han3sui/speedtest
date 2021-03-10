@@ -80,6 +80,10 @@ func main() {
 		lib.Log().Error("创建配置文件夹失败")
 		os.Exit(0)
 	}
+	if !lib.PathExists(clientPath) {
+		lib.Log().Error("xray客户端不存在，请先下载系统对应版本客户端，放入client文件夹内，并赋予执行权限")
+		os.Exit(0)
+	}
 	flags := CreateFlag()
 	lib.Log().Info("正在请求订阅，请等待...")
 	r, err := lib.Request(flags.Subscribe, "", 0)
